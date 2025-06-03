@@ -1,0 +1,21 @@
+# Visual Studio 관련 파일
+.vs/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# 빌드 디렉토리
+Debug/
+Release/
+x64/
+ipch/
+
+# 임시/로그 파일
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.log
+*.tlog
+*.sdf
