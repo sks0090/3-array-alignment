@@ -81,6 +81,7 @@ public:
 
 	///////////////////////////////////////// 일반 변수 /////////////////////////////////////////
 	MyGUI* m_pMyGui1, * m_pMyGui2, *m_pMyGui3;
+	My_FFT m_pMyFft;
 	
 	CString			m_strBoardName;		// 프레임 그래버 이름
 	CString			m_strCCFPath;		// CCF 경로
@@ -94,8 +95,9 @@ public:
 	
 	char m_charTriggerMode[50];
 
-	bool			m_bEnableProcessing;
 	bool			m_bInit;
+	bool m_bEnableDisplay;
+	bool			m_bProcessing;		// Processing 활성화 여부
 
 	unsigned char* m_DataGrab;
 	unsigned char* m_Data0;
@@ -108,9 +110,6 @@ public:
 	LARGE_INTEGER		proStartTime, proEndTime;
 
 	int m_nXferCycleSum;
-
-	bool m_bEnableDisplay;
-	bool			m_bProcessing;		// Processing 활성화 여부
 
 	double m_fMagFitHor, m_fMagFitVert, m_fMag;
 

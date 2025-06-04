@@ -194,6 +194,7 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="My_FFT.h" />
     <ClInclude Include="My_GUI.h" />
+    <ClInclude Include="My_MultiProcessing.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
@@ -203,6 +204,7 @@
     <ClCompile Include="Example_SaperaDlg.cpp" />
     <ClCompile Include="My_FFT.cpp" />
     <ClCompile Include="My_GUI.cpp" />
+    <ClCompile Include="My_MultiProcessing.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

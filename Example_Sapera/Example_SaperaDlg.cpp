@@ -299,6 +299,7 @@ bool CExampleSaperaDlg::InitCtrl()
 
 	m_nXferCycleSum = 0;
 	m_bEnableDisplay = true;
+	m_bProcessing = false;
 
 	ShowWindow(SW_MAXIMIZE);
 
@@ -500,14 +501,77 @@ void CExampleSaperaDlg::Xfer_Callback(SapXferCallbackInfo* pInfo)
 UINT CExampleSaperaDlg::ProcessingThread(LPVOID lParam)
 {
 	CExampleSaperaDlg* pDlg = (CExampleSaperaDlg*)lParam;
+	int count = 9;
+	CString sText;
 
-	while (pDlg->m_bEnableProcessing)
+	double* retX = (double*)calloc(count, sizeof(double));
+	double* retY = (double*)calloc(count, sizeof(double));
+	double* retM = (double*)calloc(count, sizeof(double));
+
+	while (pDlg->m_bProcessing)
 	{
+		sText.Format("Start(%d,%d) Size(%d,%d)", pDlg->m_pMyGui1->m_imgCoorViewX, pDlg->m_pMyGui1->m_imgCoorViewY, int(pDlg->m_pMyGui1->m_sizeViewX / pDlg->m_pMyGui1->m_fMagX), int(pDlg->m_pMyGui1->m_sizeViewY / pDlg->m_pMyGui1->m_fMagY));
+		pDlg->DisplayStatus(_T(sText));
 
+		//pDlg->m_pMyFft.CalCorrelation(pDlg->m_Data0, pDlg->m_Data1, pDlg->m_nSizeX, pDlg->m_nSizeY, pDlg->m_pMyGui1->m_imgCoorViewX, pDlg->m_pMyGui1->m_imgCoorViewY, int(pDlg->m_pMyGui1->m_sizeViewX / pDlg->m_pMyGui1->m_fMagX), int(pDlg->m_pMyGui1->m_sizeViewY / pDlg->m_pMyGui1->m_fMagY), 10, retX, retY);
+		pDlg->m_pMyFft.CalCorrelation2(pDlg->m_Data0, pDlg->m_Data1, pDlg->m_nSizeX, pDlg->m_nSizeY, pDlg->m_pMyGui1->m_imgCoorViewX, pDlg->m_pMyGui1->m_imgCoorViewY, int(pDlg->m_pMyGui1->m_sizeViewX / pDlg->m_pMyGui1->m_fMagX), int(pDlg->m_pMyGui1->m_sizeViewY / pDlg->m_pMyGui1->m_fMagY), 10, retX, retY, retM, count);
+
+		for (int i = 0; i < count; i++)
+		{
+			sText.Format("rank:%d X:%f Y:%f M:%f TopRank:%f", i, retX[i], retY[i], retM[i], retM[i] / retM[0]);
+			pDlg->DisplayStatus(_T(sText));
+		}
+
+		if ((retM[1] / retM[0]) < 0.25)
+		{
+			count = 1;
+		}
+		else
+		{
+			count = 4;
+		}
+
+		double sumX = 0, sumY = 0, sumM = 0;// , sumMX = 0, sumMY = 0;
+		for (int i = 0; i < count; i++)
+		{
+			//	if ((retM[i] / retM[0]) > 0.25)
+			{
+				sumX += retX[i] * retM[i];
+				sumY += retY[i] * retM[i];
+				sumM += retM[i];
+			}
+		}
+
+		sText.Format("TotalSum M:%f", sumM);
+		pDlg->DisplayStatus(_T(sText));
+
+		if ((sumY / sumM) > (-0.5))
+		{
+			sText.Format("Grav Y:%f Extend tube", sumY / sumM);
+		}
+		else
+		{
+			sText.Format("Grav Y:%f Reduce tube", sumY / sumM);
+		}
+		pDlg->DisplayStatus(_T(sText));
+
+		if ((sumX / sumM) < (-0.5))
+		{
+			sText.Format("Grav X:%f Rotate camera CCW", sumX / sumM);
+		}
+		else
+		{
+			sText.Format("Grav X:%f Rotate camera CW", sumX / sumM);
+		}
+		pDlg->DisplayStatus(_T(sText));
 
 		// 현재 쓰레드 카운터를 가져옴
 		WaitForSingleObject(pDlg->m_eventProcessing, INFINITE);
 	}
+
+	free(retX);
+	free(retY);
+	free(retM);
 
 	return 1;
 }
@@ -739,13 +803,17 @@ void CExampleSaperaDlg::OnBnClickedCheckProc()
 		m_nGrabFrame = 1;
 		m_StartStop.EnableWindow(FALSE);
 		m_Processing.SetWindowTextA(_T("Enable Correlation"));
+		DisplayStatus(_T("Enable Correlation 계산"));
 	}
 	else
 	{
-
+		// Processing Thread 종료
 		m_bProcessing = false;
+		m_eventProcessing.SetEvent();
+
 		m_StartStop.EnableWindow(TRUE);
 		m_Processing.SetWindowTextA(_T("Disable Correlation"));
+		DisplayStatus(_T("Disble Correlation 계산"));
 	}
 
 	UpdateData(FALSE);
