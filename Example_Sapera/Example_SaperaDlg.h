@@ -98,6 +98,7 @@ public:
 	bool			m_bInit;
 	bool m_bEnableDisplay;
 	bool			m_bProcessing;		// Processing 활성화 여부
+	bool			m_bProcessing2;		// Processing 활성화 여부
 
 	unsigned char* m_DataGrab;
 	unsigned char* m_Data0;
@@ -115,9 +116,11 @@ public:
 
 	// Threads
 	CWinThread* m_pThreadProcessing;
+	CWinThread* m_pThreadProcessing2;
 
 	// Event
 	CEvent m_eventProcessing;
+	CEvent m_eventProcessing2;
 
 public:		
 	///////////////////////////////////////// 일반 Methods /////////////////////////////////////////
@@ -136,6 +139,7 @@ public:
 
 	// Thread Method
 	static UINT ProcessingThread(LPVOID lParam);
+	static UINT ProcessingThread2(LPVOID lParam);
 
 	///////////////////////////////////////// GUI Event Methods /////////////////////////////////////////
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
