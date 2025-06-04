@@ -52,7 +52,7 @@ END_MESSAGE_MAP()
 CExampleSaperaDlg::CExampleSaperaDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_EXAMPLE_SAPERA_DIALOG, pParent)
 	, m_nBuffer(2)
-	, m_nGrabFrame(2)
+	, m_nGrabFrame(1)
 	, m_nGrabCnt(0)
 	, m_nTrashCnt(0)
 	, m_nProcCnt(0)
@@ -382,19 +382,6 @@ bool CExampleSaperaDlg::InitSap()
 	return true;
 }
 
-bool CExampleSaperaDlg::InitSapPro()
-{
-	m_BufferPro = new SapBuffer(m_nBuffer, m_Acq);
-	if (!m_BufferPro->Create())
-		return false;
-
-	m_Pro = new SapMyProcessing(m_Buffer, m_BufferPro, ProCallback, this);
-	if (!m_Pro->Create())
-		return false;
-
-	return true;
-}
-
 void CExampleSaperaDlg::FreeSap()
 {
 	// Delete all object pointer
@@ -444,28 +431,11 @@ void CExampleSaperaDlg::FreeSap()
 	}
 }
 
-void CExampleSaperaDlg::FreeSapPro()
-{
-	if (m_Pro)	m_Pro->Destroy();
-	if (m_BufferPro)	m_BufferPro->Destroy();
-	
-	// Delete all object pointer
-	if (m_Pro)				delete m_Pro;
-	if (m_BufferPro)		delete m_BufferPro;
-}
-
 void CExampleSaperaDlg::XferCallback(SapXferCallbackInfo* pInfo)
 {
 	CExampleSaperaDlg *pDlg = (CExampleSaperaDlg *)pInfo->GetContext();
 
 	pDlg->Xfer_Callback(pInfo);
-}
-
-void CExampleSaperaDlg::ProCallback(SapProCallbackInfo* pInfo)
-{
-	CExampleSaperaDlg* pDlg = (CExampleSaperaDlg*)pInfo->GetContext();
-
-	pDlg->Pro_Callback(pInfo);
 }
 
 void CExampleSaperaDlg::Xfer_Callback(SapXferCallbackInfo* pInfo)
@@ -502,51 +472,44 @@ void CExampleSaperaDlg::Xfer_Callback(SapXferCallbackInfo* pInfo)
 
 		int bufIndex = m_Buffer->GetIndex();
 
-		if (m_bProcessing)
-		{
-			m_Pro->ExecuteNext();
-		}
-		else
-		{
-			m_Buffer->GetParameter(bufIndex, CORBUFFER_PRM_ADDRESS, &m_DataGrab);
-			memcpy(m_Data0, m_DataGrab, m_nSizeX*m_nSizeY);
-			memcpy(m_Data1, m_DataGrab + (m_nSizeX * m_nSizeY)*1, m_nSizeX * m_nSizeY);
-			memcpy(m_Data2, m_DataGrab + (m_nSizeX * m_nSizeY)*2, m_nSizeX * m_nSizeY);
-			
 
-			if (m_bEnableDisplay) {
-				if (!m_pMyGui1->m_bDown)		// 마우스 왼쪽 버튼 Down 상태
-				{
-					m_pMyGui1->Show();
-					m_pMyGui2->Show();
-					m_pMyGui3->Show();
-				}
+		m_Buffer->GetParameter(bufIndex, CORBUFFER_PRM_ADDRESS, &m_DataGrab);
+		memcpy(m_Data0, m_DataGrab, m_nSizeX * m_nSizeY);
+		memcpy(m_Data1, m_DataGrab + (m_nSizeX * m_nSizeY) * 1, m_nSizeX * m_nSizeY);
+		memcpy(m_Data2, m_DataGrab + (m_nSizeX * m_nSizeY) * 2, m_nSizeX * m_nSizeY);
+
+		// Processing 수행
+		if (m_bProcessing) {
+			m_eventProcessing.SetEvent();
+		}
+
+		if (m_bEnableDisplay) {
+			if (!m_pMyGui1->m_bDown)		// 마우스 왼쪽 버튼 Down 상태
+			{
+				m_pMyGui1->Show();
+				m_pMyGui2->Show();
+				m_pMyGui3->Show();
 			}
-
-			//PostMessage(WM_UPDATE_MSG, 0, 0);
 		}
+		//PostMessage(WM_UPDATE_MSG, 0, 0);
 	}
 
 	QueryPerformanceCounter(&xferStartTime);
 }
 
-void CExampleSaperaDlg::Pro_Callback(SapProCallbackInfo* pInfo)
+UINT CExampleSaperaDlg::ProcessingThread(LPVOID lParam)
 {
-	QueryPerformanceCounter(&proEndTime);
+	CExampleSaperaDlg* pDlg = (CExampleSaperaDlg*)lParam;
 
-	if (m_nProcCnt > 1) {
-		m_nProCycle = (proEndTime.QuadPart - proStartTime.QuadPart) * 1000.f / m_perfFrequency.QuadPart;
+	while (pDlg->m_bEnableProcessing)
+	{
+
+
+		// 현재 쓰레드 카운터를 가져옴
+		WaitForSingleObject(pDlg->m_eventProcessing, INFINITE);
 	}
 
-	++m_nProcCnt;
-
-	int bufIndex = m_Pro->GetIndex();
-
-	m_View1->Show(bufIndex);
-
-	PostMessage(WM_UPDATE_MSG, 0, 0);
-
-	QueryPerformanceCounter(&proStartTime);
+	return 1;
 }
 
 bool CExampleSaperaDlg::Snap(int num)
@@ -757,24 +720,35 @@ void CExampleSaperaDlg::OnBnClickedBtnSaveImg()
 
 void CExampleSaperaDlg::OnBnClickedCheckProc()
 {
-	char strTriggerMode[50];
-
 	UpdateData(TRUE);
 
-	m_pMyGui1->FitWindow();
-	m_pMyGui2->FitWindow();
-	m_pMyGui3->FitWindow();
+	if (m_Processing.GetCheck())
+	{
+		if (m_StartStop.GetCheck())
+		{
+			GrabStop();
+			m_StartStop.SetCheck(BST_UNCHECKED);
+			m_StartStop.SetWindowTextA(_T("Grab Start"));
+			
+		}
 
-	//if (m_Processing.GetCheck())
-	//{
-	//	
-	//}
-	//else
-	//{
-	//	
-	//}
+		// Processing Thread 생성
+		m_bProcessing = true;
+		m_pThreadProcessing = AfxBeginThread(ProcessingThread, this, THREAD_PRIORITY_NORMAL, 0);
+		
+		m_nGrabFrame = 1;
+		m_StartStop.EnableWindow(FALSE);
+		m_Processing.SetWindowTextA(_T("Enable Correlation"));
+	}
+	else
+	{
 
-	
+		m_bProcessing = false;
+		m_StartStop.EnableWindow(TRUE);
+		m_Processing.SetWindowTextA(_T("Disable Correlation"));
+	}
+
+	UpdateData(FALSE);
 }
 
 
@@ -1015,7 +989,6 @@ void CExampleSaperaDlg::OnMouseLeave()
 	CDialogEx::OnMouseLeave();
 }
 
-
 ///////////////////////////////////////////////////////// <summary>			 /////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////// MENU 이벤트 처리기 /////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////// </summary>		 /////////////////////////////////////////////////////////
@@ -1046,4 +1019,3 @@ void CExampleSaperaDlg::OnFile3imagesload()
 		AfxMessageBox("3개 이미지를 선택해 주세요.");
 	}
 }
-
