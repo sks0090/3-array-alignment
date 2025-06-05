@@ -4,10 +4,9 @@
 
 #pragma once
 #include "SapClassBasic.h"		// Sapera Header
-//#include "SapClassGui.h"
-#include "SapMyProcessing.h"	// Sapera custom Processing Header
 
 #include "My_GUI.h"
+#include "My_FFT.h"
 
 #define WM_UPDATE_MSG       WM_USER + 1				// UI 업데이트
 
@@ -73,9 +72,6 @@ public:
 	SapTransfer* m_Xfer;		// Transfer
 	SapView *m_View1, *m_View2, *m_View3;			// View
 
-	SapMyProcessing* m_Pro;		// Processing
-	SapBuffer* m_BufferPro;		// Processing Buffer
-
 	// Display
 	CStatic m_ViewWnd1, m_ViewWnd2, m_ViewWnd3;
 	//CImageWnd *m_ImageWnd1, *m_ImageWnd2, *m_ImageWnd3;
@@ -85,6 +81,7 @@ public:
 
 	///////////////////////////////////////// 일반 변수 /////////////////////////////////////////
 	MyGUI* m_pMyGui1, * m_pMyGui2, *m_pMyGui3;
+	My_FFT m_pMyFft;
 	
 	CString			m_strBoardName;		// 프레임 그래버 이름
 	CString			m_strCCFPath;		// CCF 경로
@@ -98,8 +95,10 @@ public:
 	
 	char m_charTriggerMode[50];
 
-	bool			m_bProcessing;
 	bool			m_bInit;
+	bool m_bEnableDisplay;
+	bool			m_bProcessing;		// Processing 활성화 여부
+	bool			m_bProcessing2;		// Processing 활성화 여부
 
 	unsigned char* m_DataGrab;
 	unsigned char* m_Data0;
@@ -113,9 +112,15 @@ public:
 
 	int m_nXferCycleSum;
 
-	bool m_bEnableDisplay;
-
 	double m_fMagFitHor, m_fMagFitVert, m_fMag;
+
+	// Threads
+	CWinThread* m_pThreadProcessing;
+	CWinThread* m_pThreadProcessing2;
+
+	// Event
+	CEvent m_eventProcessing;
+	CEvent m_eventProcessing2;
 
 public:		
 	///////////////////////////////////////// 일반 Methods /////////////////////////////////////////
@@ -123,8 +128,6 @@ public:
 
 	bool	InitSap();
 	void	FreeSap();
-	bool	InitSapPro();
-	void	FreeSapPro();
 
 	bool	Snap(int num);
 	bool	GrabStart();
@@ -132,9 +135,11 @@ public:
 
 	// Event Callback Method
 	static void XferCallback(SapXferCallbackInfo* pInfo);
-	static void ProCallback(SapProCallbackInfo* pInfo);
 	void Xfer_Callback(SapXferCallbackInfo* pInfo);
-	void Pro_Callback(SapProCallbackInfo* pInfo);
+
+	// Thread Method
+	static UINT ProcessingThread(LPVOID lParam);
+	static UINT ProcessingThread2(LPVOID lParam);
 
 	///////////////////////////////////////// GUI Event Methods /////////////////////////////////////////
 	virtual BOOL PreTranslateMessage(MSG* pMsg);

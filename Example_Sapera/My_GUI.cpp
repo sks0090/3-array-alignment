@@ -401,7 +401,6 @@ void MyGUI::OnLButtonUp(UINT nFlags, CPoint clientCoorMouse)
 	{
 		if (m_bDown)
 		{
-			m_bDown = false;
 			//UpdataViewMain(vpos_MainX + (oldPoint.x - point.x), vpos_MainY + (oldPoint.y - point.y));
 
 			X = m_imgCoorViewCenterX + int(float(m_viewCoorBtnDown.x - (clientCoorMouse.x - m_clientCoordinateViewRect.left)) / m_fMagX + 0.5);
@@ -419,6 +418,8 @@ void MyGUI::OnLButtonUp(UINT nFlags, CPoint clientCoorMouse)
 
 			m_imgCoorViewCenterX = X;
 			m_imgCoorViewCenterY = Y;
+
+			m_bDown = false;
 		}
 	}
 }

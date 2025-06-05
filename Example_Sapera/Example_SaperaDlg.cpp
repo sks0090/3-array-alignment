@@ -52,7 +52,7 @@ END_MESSAGE_MAP()
 CExampleSaperaDlg::CExampleSaperaDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_EXAMPLE_SAPERA_DIALOG, pParent)
 	, m_nBuffer(2)
-	, m_nGrabFrame(2)
+	, m_nGrabFrame(1)
 	, m_nGrabCnt(0)
 	, m_nTrashCnt(0)
 	, m_nProcCnt(0)
@@ -299,6 +299,8 @@ bool CExampleSaperaDlg::InitCtrl()
 
 	m_nXferCycleSum = 0;
 	m_bEnableDisplay = true;
+	m_bProcessing = false;
+	m_bProcessing2 = false;
 
 	ShowWindow(SW_MAXIMIZE);
 
@@ -382,19 +384,6 @@ bool CExampleSaperaDlg::InitSap()
 	return true;
 }
 
-bool CExampleSaperaDlg::InitSapPro()
-{
-	m_BufferPro = new SapBuffer(m_nBuffer, m_Acq);
-	if (!m_BufferPro->Create())
-		return false;
-
-	m_Pro = new SapMyProcessing(m_Buffer, m_BufferPro, ProCallback, this);
-	if (!m_Pro->Create())
-		return false;
-
-	return true;
-}
-
 void CExampleSaperaDlg::FreeSap()
 {
 	// Delete all object pointer
@@ -444,28 +433,11 @@ void CExampleSaperaDlg::FreeSap()
 	}
 }
 
-void CExampleSaperaDlg::FreeSapPro()
-{
-	if (m_Pro)	m_Pro->Destroy();
-	if (m_BufferPro)	m_BufferPro->Destroy();
-	
-	// Delete all object pointer
-	if (m_Pro)				delete m_Pro;
-	if (m_BufferPro)		delete m_BufferPro;
-}
-
 void CExampleSaperaDlg::XferCallback(SapXferCallbackInfo* pInfo)
 {
 	CExampleSaperaDlg *pDlg = (CExampleSaperaDlg *)pInfo->GetContext();
 
 	pDlg->Xfer_Callback(pInfo);
-}
-
-void CExampleSaperaDlg::ProCallback(SapProCallbackInfo* pInfo)
-{
-	CExampleSaperaDlg* pDlg = (CExampleSaperaDlg*)pInfo->GetContext();
-
-	pDlg->Pro_Callback(pInfo);
 }
 
 void CExampleSaperaDlg::Xfer_Callback(SapXferCallbackInfo* pInfo)
@@ -502,51 +474,186 @@ void CExampleSaperaDlg::Xfer_Callback(SapXferCallbackInfo* pInfo)
 
 		int bufIndex = m_Buffer->GetIndex();
 
-		if (m_bProcessing)
-		{
-			m_Pro->ExecuteNext();
-		}
-		else
-		{
-			m_Buffer->GetParameter(bufIndex, CORBUFFER_PRM_ADDRESS, &m_DataGrab);
-			memcpy(m_Data0, m_DataGrab, m_nSizeX*m_nSizeY);
-			memcpy(m_Data1, m_DataGrab + (m_nSizeX * m_nSizeY)*1, m_nSizeX * m_nSizeY);
-			memcpy(m_Data2, m_DataGrab + (m_nSizeX * m_nSizeY)*2, m_nSizeX * m_nSizeY);
-			
 
-			if (m_bEnableDisplay) {
-				if (!m_pMyGui1->m_bDown)		// 마우스 왼쪽 버튼 Down 상태
-				{
-					m_pMyGui1->Show();
-					m_pMyGui2->Show();
-					m_pMyGui3->Show();
-				}
+		m_Buffer->GetParameter(bufIndex, CORBUFFER_PRM_ADDRESS, &m_DataGrab);
+		memcpy(m_Data0, m_DataGrab, m_nSizeX * m_nSizeY);
+		memcpy(m_Data1, m_DataGrab + (m_nSizeX * m_nSizeY) * 1, m_nSizeX * m_nSizeY);
+		memcpy(m_Data2, m_DataGrab + (m_nSizeX * m_nSizeY) * 2, m_nSizeX * m_nSizeY);
+
+		// Processing 수행
+		if (m_bProcessing) {
+			m_eventProcessing.SetEvent();
+			m_eventProcessing2.SetEvent();
+		}
+
+		if (m_bEnableDisplay) {
+			if (!m_pMyGui1->m_bDown)		// 마우스 왼쪽 버튼 Down 상태
+			{
+				m_pMyGui1->Show();
+				m_pMyGui2->Show();
+				m_pMyGui3->Show();
 			}
-
-			//PostMessage(WM_UPDATE_MSG, 0, 0);
 		}
+		//PostMessage(WM_UPDATE_MSG, 0, 0);
 	}
 
 	QueryPerformanceCounter(&xferStartTime);
 }
 
-void CExampleSaperaDlg::Pro_Callback(SapProCallbackInfo* pInfo)
+UINT CExampleSaperaDlg::ProcessingThread(LPVOID lParam)
 {
-	QueryPerformanceCounter(&proEndTime);
+	CExampleSaperaDlg* pDlg = (CExampleSaperaDlg*)lParam;
+	int count = 9;
+	CString sText;
 
-	if (m_nProcCnt > 1) {
-		m_nProCycle = (proEndTime.QuadPart - proStartTime.QuadPart) * 1000.f / m_perfFrequency.QuadPart;
+	double* retX = (double*)calloc(count, sizeof(double));
+	double* retY = (double*)calloc(count, sizeof(double));
+	double* retM = (double*)calloc(count, sizeof(double));
+
+	while (pDlg->m_bProcessing)
+	{
+		sText.Format("Start(%d,%d) Size(%d,%d)", pDlg->m_pMyGui1->m_imgCoorViewX, pDlg->m_pMyGui1->m_imgCoorViewY, int(pDlg->m_pMyGui1->m_sizeViewX / pDlg->m_pMyGui1->m_fMagX), int(pDlg->m_pMyGui1->m_sizeViewY / pDlg->m_pMyGui1->m_fMagY));
+		pDlg->DisplayStatus(_T(sText));
+
+		//pDlg->m_pMyFft.CalCorrelation(pDlg->m_Data0, pDlg->m_Data1, pDlg->m_nSizeX, pDlg->m_nSizeY, pDlg->m_pMyGui1->m_imgCoorViewX, pDlg->m_pMyGui1->m_imgCoorViewY, int(pDlg->m_pMyGui1->m_sizeViewX / pDlg->m_pMyGui1->m_fMagX), int(pDlg->m_pMyGui1->m_sizeViewY / pDlg->m_pMyGui1->m_fMagY), 10, retX, retY);
+		pDlg->m_pMyFft.CalCorrelation2(pDlg->m_Data0, pDlg->m_Data1, pDlg->m_nSizeX, pDlg->m_nSizeY, pDlg->m_pMyGui1->m_imgCoorViewX, pDlg->m_pMyGui1->m_imgCoorViewY, int(pDlg->m_pMyGui1->m_sizeViewX / pDlg->m_pMyGui1->m_fMagX), int(pDlg->m_pMyGui1->m_sizeViewY / pDlg->m_pMyGui1->m_fMagY), 10, retX, retY, retM, count);
+
+		for (int i = 0; i < count; i++)
+		{
+			//sText.Format("rank:%d X:%f Y:%f M:%f TopRank:%f", i, retX[i], retY[i], retM[i], retM[i] / retM[0]);
+			//pDlg->DisplayStatus(_T(sText));
+		}
+
+		if ((retM[1] / retM[0]) < 0.25)
+		{
+			count = 1;
+		}
+		else
+		{
+			count = 4;
+		}
+
+		double sumX = 0, sumY = 0, sumM = 0;// , sumMX = 0, sumMY = 0;
+		for (int i = 0; i < count; i++)
+		{
+			//	if ((retM[i] / retM[0]) > 0.25)
+			{
+				sumX += retX[i] * retM[i];
+				sumY += retY[i] * retM[i];
+				sumM += retM[i];
+			}
+		}
+
+		//sText.Format("TotalSum M:%f", sumM);
+		//pDlg->DisplayStatus(_T(sText));
+
+		if ((sumY / sumM) > 0)
+		{
+			sText.Format("Grav Y(Array 1 is behind of Array 0):%f Extend tube", sumY / sumM);
+		}
+		else
+		{
+			sText.Format("Grav Y(Array 1 is ahead of Array 0):%f Extend tube", sumY / sumM);
+		}
+		pDlg->DisplayStatus(_T(sText));
+
+		if ((sumX / sumM) < 0)
+		{
+			sText.Format("Grav X(Array 1 is right side of Array 0):%f Rotate camera", sumX / sumM);
+		}
+		else
+		{
+			sText.Format("Grav X(Array 1 is left side of Array 0):%f Rotate camera", sumX / sumM);
+		}
+		pDlg->DisplayStatus(_T(sText));
+
+		// 현재 쓰레드 카운터를 가져옴
+		WaitForSingleObject(pDlg->m_eventProcessing, INFINITE);
 	}
 
-	++m_nProcCnt;
+	free(retX);
+	free(retY);
+	free(retM);
 
-	int bufIndex = m_Pro->GetIndex();
+	return 1;
+}
 
-	m_View1->Show(bufIndex);
+UINT CExampleSaperaDlg::ProcessingThread2(LPVOID lParam)
+{
+	CExampleSaperaDlg* pDlg = (CExampleSaperaDlg*)lParam;
+	int count = 9;
+	CString sText;
 
-	PostMessage(WM_UPDATE_MSG, 0, 0);
+	double* retX = (double*)calloc(count, sizeof(double));
+	double* retY = (double*)calloc(count, sizeof(double));
+	double* retM = (double*)calloc(count, sizeof(double));
 
-	QueryPerformanceCounter(&proStartTime);
+	while (pDlg->m_bProcessing2)
+	{
+		//sText.Format("Start(%d,%d) Size(%d,%d)", pDlg->m_pMyGui1->m_imgCoorViewX, pDlg->m_pMyGui1->m_imgCoorViewY, int(pDlg->m_pMyGui1->m_sizeViewX / pDlg->m_pMyGui1->m_fMagX), int(pDlg->m_pMyGui1->m_sizeViewY / pDlg->m_pMyGui1->m_fMagY));
+		//pDlg->DisplayStatus(_T(sText));
+
+		//pDlg->m_pMyFft.CalCorrelation(pDlg->m_Data0, pDlg->m_Data1, pDlg->m_nSizeX, pDlg->m_nSizeY, pDlg->m_pMyGui1->m_imgCoorViewX, pDlg->m_pMyGui1->m_imgCoorViewY, int(pDlg->m_pMyGui1->m_sizeViewX / pDlg->m_pMyGui1->m_fMagX), int(pDlg->m_pMyGui1->m_sizeViewY / pDlg->m_pMyGui1->m_fMagY), 10, retX, retY);
+		pDlg->m_pMyFft.CalCorrelation2(pDlg->m_Data1, pDlg->m_Data2, pDlg->m_nSizeX, pDlg->m_nSizeY, pDlg->m_pMyGui1->m_imgCoorViewX, pDlg->m_pMyGui1->m_imgCoorViewY, int(pDlg->m_pMyGui1->m_sizeViewX / pDlg->m_pMyGui1->m_fMagX), int(pDlg->m_pMyGui1->m_sizeViewY / pDlg->m_pMyGui1->m_fMagY), 10, retX, retY, retM, count);
+
+		for (int i = 0; i < count; i++)
+		{
+			//sText.Format("rank:%d X:%f Y:%f M:%f TopRank:%f", i, retX[i], retY[i], retM[i], retM[i] / retM[0]);
+			//pDlg->DisplayStatus(_T(sText));
+		}
+
+		if ((retM[1] / retM[0]) < 0.25)
+		{
+			count = 1;
+		}
+		else
+		{
+			count = 4;
+		}
+
+		double sumX = 0, sumY = 0, sumM = 0;// , sumMX = 0, sumMY = 0;
+		for (int i = 0; i < count; i++)
+		{
+			//	if ((retM[i] / retM[0]) > 0.25)
+			{
+				sumX += retX[i] * retM[i];
+				sumY += retY[i] * retM[i];
+				sumM += retM[i];
+			}
+		}
+
+		//sText.Format("TotalSum M:%f", sumM);
+		//pDlg->DisplayStatus(_T(sText));
+
+		if ((sumY / sumM) > 0)
+		{
+			sText.Format("Grav Y(Array 2 is behind of Array 1):%f Extend tube", sumY / sumM);
+		}
+		else
+		{
+			sText.Format("Grav Y(Array 2 is ahead of Array 1):%f Extend tube", sumY / sumM);
+		}
+		pDlg->DisplayStatus(_T(sText));
+
+		if ((sumX / sumM) < 0)
+		{
+			sText.Format("Grav X(Array 2 is right side of Array 1):%f Rotate camera", sumX / sumM);
+		}
+		else
+		{
+			sText.Format("Grav X(Array 2 is left side of Array 1):%f Rotate camera", sumX / sumM);
+		}
+		pDlg->DisplayStatus(_T(sText));
+
+		// 현재 쓰레드 카운터를 가져옴
+		WaitForSingleObject(pDlg->m_eventProcessing2, INFINITE);
+	}
+
+	free(retX);
+	free(retY);
+	free(retM);
+
+	return 1;
 }
 
 bool CExampleSaperaDlg::Snap(int num)
@@ -757,24 +864,46 @@ void CExampleSaperaDlg::OnBnClickedBtnSaveImg()
 
 void CExampleSaperaDlg::OnBnClickedCheckProc()
 {
-	char strTriggerMode[50];
-
 	UpdateData(TRUE);
 
-	m_pMyGui1->FitWindow();
-	m_pMyGui2->FitWindow();
-	m_pMyGui3->FitWindow();
+	if (m_Processing.GetCheck())
+	{
+		if (m_StartStop.GetCheck())
+		{
+			GrabStop();
+			m_StartStop.SetCheck(BST_UNCHECKED);
+			m_StartStop.SetWindowTextA(_T("Grab Start"));
+			
+		}
 
-	//if (m_Processing.GetCheck())
-	//{
-	//	
-	//}
-	//else
-	//{
-	//	
-	//}
+		// Processing Thread 생성
+		m_bProcessing = true;
+		m_pThreadProcessing = AfxBeginThread(ProcessingThread, this, THREAD_PRIORITY_NORMAL, 0);
 
-	
+		// Processing Thread 생성
+		m_bProcessing2 = true;
+		m_pThreadProcessing2 = AfxBeginThread(ProcessingThread2, this, THREAD_PRIORITY_NORMAL, 0);
+		
+		m_nGrabFrame = 1;
+		m_StartStop.EnableWindow(FALSE);
+		m_Processing.SetWindowTextA(_T("Enable Correlation"));
+		DisplayStatus(_T("Enable Correlation 계산"));
+	}
+	else
+	{
+		// Processing Thread 종료
+		m_bProcessing = false;
+		m_eventProcessing.SetEvent();
+
+		m_bProcessing2 = false;
+		m_eventProcessing2.SetEvent();
+
+		m_StartStop.EnableWindow(TRUE);
+		m_Processing.SetWindowTextA(_T("Disable Correlation"));
+		DisplayStatus(_T("Disble Correlation 계산"));
+	}
+
+	UpdateData(FALSE);
 }
 
 
@@ -1015,7 +1144,6 @@ void CExampleSaperaDlg::OnMouseLeave()
 	CDialogEx::OnMouseLeave();
 }
 
-
 ///////////////////////////////////////////////////////// <summary>			 /////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////// MENU 이벤트 처리기 /////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////// </summary>		 /////////////////////////////////////////////////////////
@@ -1046,4 +1174,3 @@ void CExampleSaperaDlg::OnFile3imagesload()
 		AfxMessageBox("3개 이미지를 선택해 주세요.");
 	}
 }
-
