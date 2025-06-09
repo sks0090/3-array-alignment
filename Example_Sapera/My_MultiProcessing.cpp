@@ -1,4 +1,4 @@
-
+#include "pch.h"
 #include "My_MultiProcessing.h"
 
 Kyle_MultiProcessing::Kyle_MultiProcessing()
